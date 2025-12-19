@@ -1,0 +1,31 @@
+# Build stage
+FROM golang:1.24-alpine AS builder
+
+# Install ca-certificates for HTTPS
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY *.go ./
+
+# Build the binary with static linking
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o slashvibe .
+
+# Runtime stage using scratch
+FROM scratch
+
+# Copy the binary from builder
+COPY --from=builder /app/slashvibe /slashvibe
+
+# Copy SSL certificates for HTTPS requests
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# Run the binary
+ENTRYPOINT ["/slashvibe"]
