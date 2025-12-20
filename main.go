@@ -308,6 +308,12 @@ func handleViewSubmission(ctx context.Context, redisClient *redis.Client, config
 		return
 	}
 
+	// Validate repository name (GitHub allows alphanumeric, hyphens, underscores, dots)
+	if !isValidRepoName(repoName) {
+		log.Printf("Invalid repository name: %s", repoName)
+		return
+	}
+
 	repoDesc := values["repo-description"]
 
 	// Build the repository full name
@@ -316,11 +322,9 @@ func handleViewSubmission(ctx context.Context, redisClient *redis.Client, config
 	// Build the gh repo create command
 	cmd := fmt.Sprintf("gh repo create %s --public --add-readme --gitignore Go", repoFullName)
 	if repoDesc != "" {
-		// Escape the description to prevent command injection
-		escapedDesc := strings.ReplaceAll(repoDesc, `"`, `\"`)
-		escapedDesc = strings.ReplaceAll(escapedDesc, `$`, `\$`)
-		escapedDesc = strings.ReplaceAll(escapedDesc, "`", "\\`")
-		cmd = fmt.Sprintf("%s --description \"%s\"", cmd, escapedDesc)
+		// Use single quotes for better safety, but escape any single quotes in the description
+		escapedDesc := strings.ReplaceAll(repoDesc, `'`, `'\''`)
+		cmd = fmt.Sprintf("%s --description '%s'", cmd, escapedDesc)
 	}
 
 	// Create Poppit command message
@@ -364,4 +368,18 @@ func extractViewValues(submission ViewSubmissionPayload) map[string]string {
 	}
 
 	return result
+}
+
+// isValidRepoName validates that the repository name contains only valid characters
+// GitHub allows alphanumeric characters, hyphens, underscores, and dots
+func isValidRepoName(name string) bool {
+	if name == "" || len(name) > 100 {
+		return false
+	}
+	for _, c := range name {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.') {
+			return false
+		}
+	}
+	return true
 }
