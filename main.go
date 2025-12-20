@@ -54,13 +54,13 @@ type PoppitCommand struct {
 
 // Config holds the application configuration
 type Config struct {
-	RedisAddr                string
-	RedisChannel             string
+	RedisAddr                  string
+	RedisChannel               string
 	RedisViewSubmissionChannel string
-	RedisPoppitChannel       string
-	SlackToken               string
-	GithubOrg                string
-	WorkingDir               string
+	RedisPoppitList            string
+	SlackToken                 string
+	GithubOrg                  string
+	WorkingDir                 string
 }
 
 func loadConfig() (*Config, error) {
@@ -68,7 +68,7 @@ func loadConfig() (*Config, error) {
 		RedisAddr:                  getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisChannel:               getEnv("REDIS_CHANNEL", "slack-commands"),
 		RedisViewSubmissionChannel: getEnv("REDIS_VIEW_SUBMISSION_CHANNEL", "slack-relay-view-submission"),
-		RedisPoppitChannel:         getEnv("REDIS_POPPIT_CHANNEL", "poppit-commands"),
+		RedisPoppitList:            getEnv("REDIS_POPPIT_LIST", "poppit:notifications"),
 		SlackToken:                 getEnv("SLACK_BOT_TOKEN", ""),
 		GithubOrg:                  getEnv("GITHUB_ORG", ""),
 		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
@@ -336,20 +336,20 @@ func handleViewSubmission(ctx context.Context, redisClient *redis.Client, config
 		Commands: []string{cmd},
 	}
 
-	// Publish to Poppit channel
+	// Push to Poppit list
 	poppitPayload, err := json.Marshal(poppitCmd)
 	if err != nil {
 		log.Printf("Failed to marshal Poppit command: %v", err)
 		return
 	}
 
-	err = redisClient.Publish(ctx, config.RedisPoppitChannel, string(poppitPayload)).Err()
+	err = redisClient.RPush(ctx, config.RedisPoppitList, string(poppitPayload)).Err()
 	if err != nil {
-		log.Printf("Failed to publish to Poppit channel: %v", err)
+		log.Printf("Failed to push to Poppit list: %v", err)
 		return
 	}
 
-	log.Printf("Successfully published Poppit command to channel %s: %s", config.RedisPoppitChannel, string(poppitPayload))
+	log.Printf("Successfully pushed Poppit command to list %s: %s", config.RedisPoppitList, string(poppitPayload))
 }
 
 // extractViewValues extracts values from the view submission state

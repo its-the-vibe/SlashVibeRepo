@@ -6,7 +6,7 @@ A simple Go service that subscribes to Slack slash commands and view submissions
 
 - Subscribes to Redis channels to receive Slack slash command and view submission payloads
 - Processes `/new-repo` command to display a modal for creating new repositories
-- Processes view submissions to publish repository creation commands to Poppit
+- Processes view submissions to push repository creation commands to Poppit
 - Configurable via environment variables
 - Docker and Docker Compose support with scratch runtime for minimal image size
 
@@ -25,7 +25,7 @@ The service can be configured via environment variables or a `.secret` file:
 - `REDIS_ADDR` - Redis server address (default: `localhost:6379`)
 - `REDIS_CHANNEL` - Redis channel to subscribe to for slash commands (default: `slack-commands`)
 - `REDIS_VIEW_SUBMISSION_CHANNEL` - Redis channel to subscribe to for view submissions (default: `slack-relay-view-submission`)
-- `REDIS_POPPIT_CHANNEL` - Redis channel to publish Poppit commands to (default: `poppit-commands`)
+- `REDIS_POPPIT_LIST` - Redis list to push Poppit commands to (default: `poppit-commands`)
 - `SLACK_BOT_TOKEN` - Slack bot token (required)
 - `GITHUB_ORG` - GitHub organization name for creating repositories (required)
 - `WORKING_DIR` - Working directory for Poppit commands (default: `/tmp`)
@@ -112,7 +112,7 @@ When the user submits the modal, the service will:
 1. Receive the view submission payload on the `REDIS_VIEW_SUBMISSION_CHANNEL`
 2. Extract the repository name and description from the submission
 3. Generate a GitHub CLI command to create the repository
-4. Publish a Poppit command to the `REDIS_POPPIT_CHANNEL`
+4. Push a Poppit command to the `REDIS_POPPIT_CHANNEL`
 
 ## View Submission Payload Format
 
@@ -150,7 +150,7 @@ The service expects view submission payloads in the following JSON format on the
 
 ## Poppit Command Output
 
-When a view submission is processed, the service publishes a command to the Poppit channel:
+When a view submission is processed, the service pushes a command to the Poppit list:
 
 ```json
 {
