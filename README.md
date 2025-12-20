@@ -25,7 +25,7 @@ The service can be configured via environment variables or a `.secret` file:
 - `REDIS_ADDR` - Redis server address (default: `localhost:6379`)
 - `REDIS_CHANNEL` - Redis channel to subscribe to for slash commands (default: `slack-commands`)
 - `REDIS_VIEW_SUBMISSION_CHANNEL` - Redis channel to subscribe to for view submissions (default: `slack-relay-view-submission`)
-- `REDIS_POPPIT_CHANNEL` - Redis list to push Poppit commands to (default: `poppit-commands`)
+- `REDIS_POPPIT_LIST` - Redis list to push Poppit commands to (default: `poppit-commands`)
 - `SLACK_BOT_TOKEN` - Slack bot token (required)
 - `GITHUB_ORG` - GitHub organization name for creating repositories (required)
 - `WORKING_DIR` - Working directory for Poppit commands (default: `/tmp`)
