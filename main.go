@@ -316,7 +316,11 @@ func handleViewSubmission(ctx context.Context, redisClient *redis.Client, config
 	// Build the gh repo create command
 	cmd := fmt.Sprintf("gh repo create %s --public --add-readme --gitignore Go", repoFullName)
 	if repoDesc != "" {
-		cmd = fmt.Sprintf("%s --description \"%s\"", cmd, repoDesc)
+		// Escape the description to prevent command injection
+		escapedDesc := strings.ReplaceAll(repoDesc, `"`, `\"`)
+		escapedDesc = strings.ReplaceAll(escapedDesc, `$`, `\$`)
+		escapedDesc = strings.ReplaceAll(escapedDesc, "`", "\\`")
+		cmd = fmt.Sprintf("%s --description \"%s\"", cmd, escapedDesc)
 	}
 
 	// Create Poppit command message
@@ -351,10 +355,11 @@ func extractViewValues(submission ViewSubmissionPayload) map[string]string {
 
 	for blockID, blockValues := range submission.View.State.Values {
 		// Each block has a map of action_id -> value object
-		// We only care about the first value in each block
+		// In practice, each block contains exactly one action_id
+		// We extract the first (and only) value from each block
 		for _, valueObj := range blockValues {
 			result[blockID] = valueObj.Value
-			break // Only take the first value
+			break
 		}
 	}
 
