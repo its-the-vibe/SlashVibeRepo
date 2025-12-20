@@ -320,20 +320,28 @@ func handleViewSubmission(ctx context.Context, redisClient *redis.Client, config
 	repoFullName := fmt.Sprintf("%s/%s", config.GithubOrg, repoName)
 
 	// Build the gh repo create command
-	cmd := fmt.Sprintf("gh repo create %s --public --add-readme --gitignore Go", repoFullName)
+	ghRepoCreateCmd := fmt.Sprintf("gh repo create %s --public --add-readme --gitignore Go", repoFullName)
 	if repoDesc != "" {
 		// Use single quotes for better safety, but escape any single quotes in the description
 		escapedDesc := strings.ReplaceAll(repoDesc, `'`, `'\''`)
-		cmd = fmt.Sprintf("%s --description '%s'", cmd, escapedDesc)
+		ghRepoCreateCmd = fmt.Sprintf("%s --description '%s'", ghRepoCreateCmd, escapedDesc)
 	}
+
+	ghRepoCloneCmd := fmt.Sprintf("gh repo clone %s", repoFullName)
+
+	ghVibeInitCmd := fmt.Sprintf("gh vibe init %s", repoFullName)
 
 	// Create Poppit command message
 	poppitCmd := PoppitCommand{
-		Repo:     repoFullName,
-		Branch:   "refs/heads/main",
-		Type:     "slash-vibe-new-repo",
-		Dir:      config.WorkingDir,
-		Commands: []string{cmd},
+		Repo:   repoFullName,
+		Branch: "refs/heads/main",
+		Type:   "slash-vibe-new-repo",
+		Dir:    config.WorkingDir,
+		Commands: []string{
+			ghRepoCreateCmd,
+			ghRepoCloneCmd,
+			ghVibeInitCmd,
+		},
 	}
 
 	// Push to Poppit list
