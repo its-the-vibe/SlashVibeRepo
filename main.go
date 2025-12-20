@@ -30,18 +30,48 @@ type SlashCommandPayload struct {
 	APIAppID    string `json:"api_app_id"`
 }
 
+// ViewSubmissionPayload represents the incoming view submission from Redis
+type ViewSubmissionPayload struct {
+	Type string `json:"type"`
+	View struct {
+		State struct {
+			Values map[string]map[string]struct {
+				Type  string `json:"type"`
+				Value string `json:"value"`
+			} `json:"values"`
+		} `json:"state"`
+	} `json:"view"`
+}
+
+// PoppitCommand represents the command message to be published to Poppit
+type PoppitCommand struct {
+	Repo     string   `json:"repo"`
+	Branch   string   `json:"branch"`
+	Type     string   `json:"type"`
+	Dir      string   `json:"dir"`
+	Commands []string `json:"commands"`
+}
+
 // Config holds the application configuration
 type Config struct {
-	RedisAddr    string
-	RedisChannel string
-	SlackToken   string
+	RedisAddr                string
+	RedisChannel             string
+	RedisViewSubmissionChannel string
+	RedisPoppitChannel       string
+	SlackToken               string
+	GithubOrg                string
+	WorkingDir               string
 }
 
 func loadConfig() (*Config, error) {
 	config := &Config{
-		RedisAddr:    getEnv("REDIS_ADDR", "localhost:6379"),
-		RedisChannel: getEnv("REDIS_CHANNEL", "slack-commands"),
-		SlackToken:   getEnv("SLACK_BOT_TOKEN", ""),
+		RedisAddr:                  getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisChannel:               getEnv("REDIS_CHANNEL", "slack-commands"),
+		RedisViewSubmissionChannel: getEnv("REDIS_VIEW_SUBMISSION_CHANNEL", "slack-relay-view-submission"),
+		RedisPoppitChannel:         getEnv("REDIS_POPPIT_CHANNEL", "poppit-commands"),
+		SlackToken:                 getEnv("SLACK_BOT_TOKEN", ""),
+		GithubOrg:                  getEnv("GITHUB_ORG", ""),
+		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
 	}
 
 	// Try to load Slack token from .secret file if not set via env var
@@ -53,6 +83,10 @@ func loadConfig() (*Config, error) {
 
 	if config.SlackToken == "" {
 		return nil, fmt.Errorf("SLACK_BOT_TOKEN must be set via environment variable or .secret file")
+	}
+
+	if config.GithubOrg == "" {
+		return nil, fmt.Errorf("GITHUB_ORG must be set via environment variable")
 	}
 
 	return config, nil
@@ -103,10 +137,14 @@ func main() {
 		cancel()
 	}()
 
-	// Subscribe to Redis channel
+	// Subscribe to Redis channels
 	log.Printf("Subscribing to Redis channel: %s", config.RedisChannel)
 	pubsub := redisClient.Subscribe(ctx, config.RedisChannel)
 	defer pubsub.Close()
+
+	log.Printf("Subscribing to Redis view submission channel: %s", config.RedisViewSubmissionChannel)
+	viewSubmissionPubsub := redisClient.Subscribe(ctx, config.RedisViewSubmissionChannel)
+	defer viewSubmissionPubsub.Close()
 
 	// Wait for subscription confirmation
 	_, err = pubsub.Receive(ctx)
@@ -115,8 +153,15 @@ func main() {
 	}
 	log.Println("Successfully subscribed to Redis channel")
 
-	// Process messages
+	_, err = viewSubmissionPubsub.Receive(ctx)
+	if err != nil {
+		log.Fatalf("Failed to subscribe to view submission channel: %v", err)
+	}
+	log.Println("Successfully subscribed to view submission channel")
+
+	// Process messages from both channels
 	ch := pubsub.Channel()
+	viewSubmissionCh := viewSubmissionPubsub.Channel()
 	for {
 		select {
 		case <-ctx.Done():
@@ -127,6 +172,11 @@ func main() {
 				continue
 			}
 			handleMessage(ctx, slackClient, msg.Payload)
+		case msg := <-viewSubmissionCh:
+			if msg == nil {
+				continue
+			}
+			handleViewSubmission(ctx, redisClient, config, msg.Payload)
 		}
 	}
 }
@@ -235,4 +285,78 @@ func createNewRepoModal(repoName string) slack.ModalViewRequest {
 	}
 
 	return modalView
+}
+
+// handleViewSubmission processes view submission payloads from Redis
+func handleViewSubmission(ctx context.Context, redisClient *redis.Client, config *Config, payload string) {
+	log.Printf("Received view submission: %s", payload)
+
+	var submission ViewSubmissionPayload
+	if err := json.Unmarshal([]byte(payload), &submission); err != nil {
+		log.Printf("Failed to unmarshal view submission payload: %v", err)
+		return
+	}
+
+	// Extract values from the view state
+	values := extractViewValues(submission)
+	log.Printf("Extracted values: %+v", values)
+
+	// Get repository name and description
+	repoName, ok := values["repo-name"]
+	if !ok || repoName == "" {
+		log.Printf("Missing repository name in view submission")
+		return
+	}
+
+	repoDesc := values["repo-description"]
+
+	// Build the repository full name
+	repoFullName := fmt.Sprintf("%s/%s", config.GithubOrg, repoName)
+
+	// Build the gh repo create command
+	cmd := fmt.Sprintf("gh repo create %s --public --add-readme --gitignore Go", repoFullName)
+	if repoDesc != "" {
+		cmd = fmt.Sprintf("%s --description \"%s\"", cmd, repoDesc)
+	}
+
+	// Create Poppit command message
+	poppitCmd := PoppitCommand{
+		Repo:     repoFullName,
+		Branch:   "refs/heads/main",
+		Type:     "slash-vibe-new-repo",
+		Dir:      config.WorkingDir,
+		Commands: []string{cmd},
+	}
+
+	// Publish to Poppit channel
+	poppitPayload, err := json.Marshal(poppitCmd)
+	if err != nil {
+		log.Printf("Failed to marshal Poppit command: %v", err)
+		return
+	}
+
+	err = redisClient.Publish(ctx, config.RedisPoppitChannel, string(poppitPayload)).Err()
+	if err != nil {
+		log.Printf("Failed to publish to Poppit channel: %v", err)
+		return
+	}
+
+	log.Printf("Successfully published Poppit command to channel %s: %s", config.RedisPoppitChannel, string(poppitPayload))
+}
+
+// extractViewValues extracts values from the view submission state
+// Equivalent to: jq '.view.state.values | map_values(.[] | .value)'
+func extractViewValues(submission ViewSubmissionPayload) map[string]string {
+	result := make(map[string]string)
+
+	for blockID, blockValues := range submission.View.State.Values {
+		// Each block has a map of action_id -> value object
+		// We only care about the first value in each block
+		for _, valueObj := range blockValues {
+			result[blockID] = valueObj.Value
+			break // Only take the first value
+		}
+	}
+
+	return result
 }
