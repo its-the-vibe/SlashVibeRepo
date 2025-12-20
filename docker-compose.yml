@@ -8,8 +8,12 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       - REDIS_ADDR=${REDIS_ADDR:-host.docker.internal:6379}
-      - REDIS_CHANNEL=slack-commands
+      - REDIS_CHANNEL=${REDIS_CHANNEL:-slack-commands}
+      - REDIS_VIEW_SUBMISSION_CHANNEL=${REDIS_VIEW_SUBMISSION_CHANNEL:-slack-relay-view-submission}
+      - REDIS_POPPIT_CHANNEL=${REDIS_POPPIT_CHANNEL:-poppit-commands}
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - GITHUB_ORG=${GITHUB_ORG}
+      - WORKING_DIR=${WORKING_DIR:-/tmp}
     volumes:
       - ./.secret:/app/.secret:ro
     restart: unless-stopped
