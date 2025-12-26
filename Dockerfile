@@ -16,16 +16,16 @@ RUN go mod download
 COPY *.go ./
 
 # Build the binary with static linking
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o slashvibe .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o slashviberepo .
 
 # Runtime stage using scratch
 FROM scratch
 
 # Copy the binary from builder
-COPY --from=builder /app/slashvibe /slashvibe
+COPY --from=builder /app/slashviberepo /slashviberepo
 
 # Copy SSL certificates for HTTPS requests
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Run the binary
-ENTRYPOINT ["/slashvibe"]
+ENTRYPOINT ["/slashviberepo"]

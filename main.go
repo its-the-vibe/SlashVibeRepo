@@ -95,7 +95,7 @@ func getEnv(key, defaultValue string) string {
 }
 
 func main() {
-	log.Println("Starting SlashVibe service...")
+	log.Println("Starting SlashVibeRepo service...")
 
 	config, err := loadConfig()
 	if err != nil {

@@ -1,8 +1,8 @@
-# Copilot Instructions for SlashVibe
+# Copilot Instructions for SlashVibeRepo
 
 ## Project Overview
 
-SlashVibe is a Go service that bridges Slack slash commands with GitHub repository creation via Redis pub/sub. It subscribes to Redis channels to receive Slack slash command and view submission payloads, then processes them to create GitHub repositories using the GitHub CLI.
+SlashVibeRepo is a Go service that bridges Slack slash commands with GitHub repository creation via Redis pub/sub. It subscribes to Redis channels to receive Slack slash command and view submission payloads, then processes them to create GitHub repositories using the GitHub CLI.
 
 ## Technology Stack
 
@@ -31,10 +31,10 @@ SlashVibe is a Go service that bridges Slack slash commands with GitHub reposito
 
 ```bash
 # Standard build
-go build -o slashvibe
+go build -o slashviberepo
 
 # Build for production (static binary)
-CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o slashvibe .
+CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o slashviberepo .
 
 # Docker build
 docker-compose up --build

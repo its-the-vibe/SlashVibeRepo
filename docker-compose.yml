@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  slashvibe:
+  slashviberepo:
     build: .
     read_only: true
     extra_hosts:

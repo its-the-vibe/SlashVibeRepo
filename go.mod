@@ -1,4 +1,4 @@
-module github.com/its-the-vibe/SlashVibe
+module github.com/its-the-vibe/SlashVibeRepo
 
 go 1.25.5
 

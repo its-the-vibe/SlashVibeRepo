@@ -1,4 +1,4 @@
-# SlashVibe
+# SlashVibeRepo
 
 A simple Go service that subscribes to Slack slash commands and view submissions via Redis and performs operations.
 
@@ -40,14 +40,14 @@ go mod download
 
 2. Build the service:
 ```bash
-go build -o slashvibe
+go build -o slashviberepo
 ```
 
 3. Run the service:
 ```bash
 export SLACK_BOT_TOKEN=xoxb-your-token-here
 export GITHUB_ORG=your-github-org
-./slashvibe
+./slashviberepo
 ```
 
 ## Running with Docker Compose
@@ -61,7 +61,7 @@ docker-compose up --build
 
 This will start:
 - Redis server on port 6379
-- SlashVibe service connected to Redis
+- SlashVibeRepo service connected to Redis
 
 ## Slash Command Payload Format
 
