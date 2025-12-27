@@ -14,6 +14,11 @@ import (
 	"github.com/slack-go/slack"
 )
 
+const (
+	// SevenDaysTTL represents the TTL for confirmation messages (7 days in seconds)
+	SevenDaysTTL = 7 * 24 * 60 * 60
+)
+
 // SlashCommandPayload represents the incoming slash command from Redis
 type SlashCommandPayload struct {
 	Token       string `json:"token"`
@@ -68,6 +73,7 @@ type Config struct {
 	RedisPoppitList            string
 	RedisSlackLinerList        string
 	SlackToken                 string
+	SlackChannelNewRepo        string
 	GithubOrg                  string
 	WorkingDir                 string
 }
@@ -81,6 +87,7 @@ func loadConfig() (*Config, error) {
 		RedisPoppitList:            getEnv("REDIS_POPPIT_LIST", "poppit:notifications"),
 		RedisSlackLinerList:        getEnv("REDIS_SLACKLINER_LIST", "slack_messages"),
 		SlackToken:                 getEnv("SLACK_BOT_TOKEN", ""),
+		SlackChannelNewRepo:        getEnv("SLACK_CHANNEL_NEW_REPO", "#new-repo"),
 		GithubOrg:                  getEnv("GITHUB_ORG", ""),
 		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
 	}
@@ -379,11 +386,11 @@ func sendNewRepoConfirmation(ctx context.Context, redisClient *redis.Client, con
 		confirmationText = fmt.Sprintf("%s\n*Description:* %s", confirmationText, repoDesc)
 	}
 
-	// Create the SlackLiner message with 7 days TTL (7 * 24 * 60 * 60 = 604800 seconds)
+	// Create the SlackLiner message with 7 days TTL
 	slackMessage := SlackLinerMessage{
-		Channel: "#new-repo",
+		Channel: config.SlackChannelNewRepo,
 		Text:    confirmationText,
-		TTL:     604800,
+		TTL:     SevenDaysTTL,
 	}
 
 	// Marshal to JSON

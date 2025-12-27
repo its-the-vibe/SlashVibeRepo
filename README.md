@@ -29,6 +29,7 @@ The service can be configured via environment variables:
 - `REDIS_POPPIT_LIST` - Redis list to push Poppit commands to (default: `poppit-commands`)
 - `REDIS_SLACKLINER_LIST` - Redis list to push SlackLiner messages to (default: `slack_messages`)
 - `SLACK_BOT_TOKEN` - Slack bot token (required)
+- `SLACK_CHANNEL_NEW_REPO` - Slack channel for new repository confirmations (default: `#new-repo`)
 - `GITHUB_ORG` - GitHub organization name for creating repositories (required)
 - `WORKING_DIR` - Working directory for Poppit commands (default: `/tmp`)
 
