@@ -27,7 +27,9 @@ The service can be configured via environment variables:
 - `REDIS_CHANNEL` - Redis channel to subscribe to for slash commands (default: `slack-commands`)
 - `REDIS_VIEW_SUBMISSION_CHANNEL` - Redis channel to subscribe to for view submissions (default: `slack-relay-view-submission`)
 - `REDIS_POPPIT_LIST` - Redis list to push Poppit commands to (default: `poppit-commands`)
+- `REDIS_SLACKLINER_LIST` - Redis list to push SlackLiner messages to (default: `slack_messages`)
 - `SLACK_BOT_TOKEN` - Slack bot token (required)
+- `SLACK_CHANNEL_NEW_REPO` - Slack channel for new repository confirmations (default: `#new-repo`)
 - `GITHUB_ORG` - GitHub organization name for creating repositories (required)
 - `WORKING_DIR` - Working directory for Poppit commands (default: `/tmp`)
 
@@ -98,6 +100,10 @@ When the user submits the modal, the service will:
 2. Extract the repository name and description from the submission
 3. Generate a GitHub CLI command to create the repository
 4. Push a Poppit command to the `REDIS_POPPIT_CHANNEL`
+5. Send a confirmation message to the `#new-repo` Slack channel via SlackLiner with:
+   - Repository name and link
+   - Repository description (if provided)
+   - 7-day TTL for automatic message cleanup
 
 ## View Submission Payload Format
 
