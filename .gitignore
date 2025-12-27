@@ -11,6 +11,7 @@
 # Project binary
 SlashVibe
 slashvibe
+slashviberepo
 
 # Test binary, built with `go test -c`
 *.test

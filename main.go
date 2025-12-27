@@ -52,6 +52,13 @@ type PoppitCommand struct {
 	Commands []string `json:"commands"`
 }
 
+// SlackLinerMessage represents the message to be sent to SlackLiner
+type SlackLinerMessage struct {
+	Channel string `json:"channel"`
+	Text    string `json:"text"`
+	TTL     int    `json:"ttl,omitempty"`
+}
+
 // Config holds the application configuration
 type Config struct {
 	RedisAddr                  string
@@ -59,6 +66,7 @@ type Config struct {
 	RedisChannel               string
 	RedisViewSubmissionChannel string
 	RedisPoppitList            string
+	RedisSlackLinerList        string
 	SlackToken                 string
 	GithubOrg                  string
 	WorkingDir                 string
@@ -71,6 +79,7 @@ func loadConfig() (*Config, error) {
 		RedisChannel:               getEnv("REDIS_CHANNEL", "slack-commands"),
 		RedisViewSubmissionChannel: getEnv("REDIS_VIEW_SUBMISSION_CHANNEL", "slack-relay-view-submission"),
 		RedisPoppitList:            getEnv("REDIS_POPPIT_LIST", "poppit:notifications"),
+		RedisSlackLinerList:        getEnv("REDIS_SLACKLINER_LIST", "slack_messages"),
 		SlackToken:                 getEnv("SLACK_BOT_TOKEN", ""),
 		GithubOrg:                  getEnv("GITHUB_ORG", ""),
 		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
@@ -354,6 +363,44 @@ func handleViewSubmission(ctx context.Context, redisClient *redis.Client, config
 	}
 
 	log.Printf("Successfully pushed Poppit command to list %s: %s", config.RedisPoppitList, string(poppitPayload))
+
+	// Send confirmation message to SlackLiner
+	sendNewRepoConfirmation(ctx, redisClient, config, repoFullName, repoDesc)
+}
+
+// sendNewRepoConfirmation sends a confirmation message to SlackLiner
+func sendNewRepoConfirmation(ctx context.Context, redisClient *redis.Client, config *Config, repoFullName, repoDesc string) {
+	// Build the GitHub repository URL
+	repoURL := fmt.Sprintf("https://github.com/%s", repoFullName)
+
+	// Build the confirmation message
+	confirmationText := fmt.Sprintf("✅ New repository creation initiated!\n\n*Repository:* <%s|%s>", repoURL, repoFullName)
+	if repoDesc != "" {
+		confirmationText = fmt.Sprintf("%s\n*Description:* %s", confirmationText, repoDesc)
+	}
+
+	// Create the SlackLiner message with 7 days TTL (7 * 24 * 60 * 60 = 604800 seconds)
+	slackMessage := SlackLinerMessage{
+		Channel: "#new-repo",
+		Text:    confirmationText,
+		TTL:     604800,
+	}
+
+	// Marshal to JSON
+	messagePayload, err := json.Marshal(slackMessage)
+	if err != nil {
+		log.Printf("Failed to marshal SlackLiner message: %v", err)
+		return
+	}
+
+	// Push to SlackLiner Redis list
+	err = redisClient.RPush(ctx, config.RedisSlackLinerList, string(messagePayload)).Err()
+	if err != nil {
+		log.Printf("Failed to push to SlackLiner list: %v", err)
+		return
+	}
+
+	log.Printf("Successfully sent confirmation message to SlackLiner for repo: %s", repoFullName)
 }
 
 // extractViewValues extracts values from the view submission state
