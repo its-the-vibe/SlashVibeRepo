@@ -17,6 +17,8 @@ import (
 const (
 	// SevenDaysTTL represents the TTL for confirmation messages (7 days in seconds)
 	SevenDaysTTL = 7 * 24 * 60 * 60
+	// NewRepoModalCallbackID is the callback ID for the new repo modal
+	NewRepoModalCallbackID = "create_github_repo_modal"
 )
 
 // SlashCommandPayload represents the incoming slash command from Redis
@@ -39,7 +41,8 @@ type SlashCommandPayload struct {
 type ViewSubmissionPayload struct {
 	Type string `json:"type"`
 	View struct {
-		State struct {
+		CallbackID string `json:"callback_id"`
+		State      struct {
 			Values map[string]map[string]struct {
 				Type  string `json:"type"`
 				Value string `json:"value"`
@@ -274,7 +277,8 @@ func createNewRepoModal(repoName string) slack.ModalViewRequest {
 
 	// Create the modal view
 	modalView := slack.ModalViewRequest{
-		Type: slack.VTModal,
+		Type:       slack.VTModal,
+		CallbackID: NewRepoModalCallbackID,
 		Title: &slack.TextBlockObject{
 			Type: slack.PlainTextType,
 			Text: "New Repo",
@@ -306,6 +310,12 @@ func handleViewSubmission(ctx context.Context, redisClient *redis.Client, config
 	var submission ViewSubmissionPayload
 	if err := json.Unmarshal([]byte(payload), &submission); err != nil {
 		log.Printf("Failed to unmarshal view submission payload: %v", err)
+		return
+	}
+
+	// Only handle our specific callback_id
+	if submission.View.CallbackID != NewRepoModalCallbackID {
+		log.Printf("Ignoring view submission with callback_id: %s", submission.View.CallbackID)
 		return
 	}
 
