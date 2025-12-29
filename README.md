@@ -32,6 +32,24 @@ The service can be configured via environment variables:
 - `SLACK_CHANNEL_NEW_REPO` - Slack channel for new repository confirmations (default: `#new-repo`)
 - `GITHUB_ORG` - GitHub organization name for creating repositories (required)
 - `WORKING_DIR` - Working directory for Poppit commands (default: `/tmp`)
+- `LOG_LEVEL` - Logging level: `debug`, `info`, `warn`, or `error` (default: `info`)
+
+### Log Levels
+
+The service supports the following log levels (from most to least verbose):
+
+- `debug` - Detailed diagnostic information including message payloads and extracted values
+- `info` - General informational messages about normal operations (startup, connections, command processing)
+- `warn` - Warning messages for unexpected but recoverable situations
+- `error` - Error messages for failures that prevent operations
+
+Example:
+```bash
+export LOG_LEVEL=debug  # Show all log messages
+export LOG_LEVEL=info   # Default - show info, warn, and error messages
+export LOG_LEVEL=warn   # Show only warnings and errors
+export LOG_LEVEL=error  # Show only errors
+```
 
 ## Running Locally
 
