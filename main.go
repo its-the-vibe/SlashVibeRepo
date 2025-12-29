@@ -83,6 +83,7 @@ func (l *Logger) Error(format string, v ...interface{}) {
 }
 
 // Fatal logs a fatal error message and exits
+// Fatal messages are always logged regardless of level as they indicate program termination
 func (l *Logger) Fatal(format string, v ...interface{}) {
 	log.Fatalf("[FATAL] "+format, v...)
 }
@@ -182,7 +183,7 @@ func getEnv(key, defaultValue string) string {
 }
 
 func main() {
-	// Create logger with info level initially for startup
+	// Create initial logger for startup (before config is loaded)
 	logger := NewLogger("info")
 	logger.Info("Starting SlashVibeRepo service...")
 
