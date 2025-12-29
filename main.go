@@ -21,6 +21,72 @@ const (
 	NewRepoModalCallbackID = "create_github_repo_modal"
 )
 
+// LogLevel represents the logging level
+type LogLevel int
+
+const (
+	LogLevelDebug LogLevel = iota
+	LogLevelInfo
+	LogLevelWarn
+	LogLevelError
+)
+
+// Logger provides structured logging with log levels
+type Logger struct {
+	level LogLevel
+}
+
+// NewLogger creates a new Logger with the specified level
+func NewLogger(levelStr string) *Logger {
+	var level LogLevel
+	switch strings.ToLower(levelStr) {
+	case "debug":
+		level = LogLevelDebug
+	case "info":
+		level = LogLevelInfo
+	case "warn", "warning":
+		level = LogLevelWarn
+	case "error":
+		level = LogLevelError
+	default:
+		level = LogLevelInfo
+	}
+	return &Logger{level: level}
+}
+
+// Debug logs a debug message
+func (l *Logger) Debug(format string, v ...interface{}) {
+	if l.level <= LogLevelDebug {
+		log.Printf("[DEBUG] "+format, v...)
+	}
+}
+
+// Info logs an info message
+func (l *Logger) Info(format string, v ...interface{}) {
+	if l.level <= LogLevelInfo {
+		log.Printf("[INFO] "+format, v...)
+	}
+}
+
+// Warn logs a warning message
+func (l *Logger) Warn(format string, v ...interface{}) {
+	if l.level <= LogLevelWarn {
+		log.Printf("[WARN] "+format, v...)
+	}
+}
+
+// Error logs an error message
+func (l *Logger) Error(format string, v ...interface{}) {
+	if l.level <= LogLevelError {
+		log.Printf("[ERROR] "+format, v...)
+	}
+}
+
+// Fatal logs a fatal error message and exits
+func (l *Logger) Fatal(format string, v ...interface{}) {
+	log.Fatalf("[FATAL] "+format, v...)
+}
+
 // SlashCommandPayload represents the incoming slash command from Redis
 type SlashCommandPayload struct {
 	Token       string `json:"token"`
@@ -79,6 +145,7 @@ type Config struct {
 	SlackChannelNewRepo        string
 	GithubOrg                  string
 	WorkingDir                 string
+	LogLevel                   string
 }
 
 func loadConfig() (*Config, error) {
@@ -93,6 +160,7 @@ func loadConfig() (*Config, error) {
 		SlackChannelNewRepo:        getEnv("SLACK_CHANNEL_NEW_REPO", "#new-repo"),
 		GithubOrg:                  getEnv("GITHUB_ORG", ""),
 		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
+		LogLevel:                   getEnv("LOG_LEVEL", "info"),
 	}
 
 	if config.SlackToken == "" {
@@ -114,12 +182,18 @@ func getEnv(key, defaultValue string) string {
 }
 
 func main() {
-	log.Println("Starting SlashVibeRepo service...")
+	// Create logger with info level initially for startup
+	logger := NewLogger("info")
+	logger.Info("Starting SlashVibeRepo service...")
 
 	config, err := loadConfig()
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		logger.Fatal("Failed to load configuration: %v", err)
 	}
+
+	// Update logger with configured log level
+	logger = NewLogger(config.LogLevel)
+	logger.Info("Log level set to: %s", config.LogLevel)
 
 	// Initialize Slack client
 	slackClient := slack.New(config.SlackToken)
@@ -134,9 +208,9 @@ func main() {
 	// Test Redis connection
 	ctx := context.Background()
 	if err := redisClient.Ping(ctx).Err(); err != nil {
-		log.Fatalf("Failed to connect to Redis: %v", err)
+		logger.Fatal("Failed to connect to Redis: %v", err)
 	}
-	log.Printf("Connected to Redis at %s", config.RedisAddr)
+	logger.Info("Connected to Redis at %s", config.RedisAddr)
 
 	// Create a context that can be cancelled
 	ctx, cancel := context.WithCancel(ctx)
@@ -148,31 +222,31 @@ func main() {
 
 	go func() {
 		<-sigChan
-		log.Println("Received shutdown signal, cleaning up...")
+		logger.Info("Received shutdown signal, cleaning up...")
 		cancel()
 	}()
 
 	// Subscribe to Redis channels
-	log.Printf("Subscribing to Redis channel: %s", config.RedisChannel)
+	logger.Info("Subscribing to Redis channel: %s", config.RedisChannel)
 	pubsub := redisClient.Subscribe(ctx, config.RedisChannel)
 	defer pubsub.Close()
 
-	log.Printf("Subscribing to Redis view submission channel: %s", config.RedisViewSubmissionChannel)
+	logger.Info("Subscribing to Redis view submission channel: %s", config.RedisViewSubmissionChannel)
 	viewSubmissionPubsub := redisClient.Subscribe(ctx, config.RedisViewSubmissionChannel)
 	defer viewSubmissionPubsub.Close()
 
 	// Wait for subscription confirmation
 	_, err = pubsub.Receive(ctx)
 	if err != nil {
-		log.Fatalf("Failed to subscribe to Redis channel: %v", err)
+		logger.Fatal("Failed to subscribe to Redis channel: %v", err)
 	}
-	log.Println("Successfully subscribed to Redis channel")
+	logger.Info("Successfully subscribed to Redis channel")
 
 	_, err = viewSubmissionPubsub.Receive(ctx)
 	if err != nil {
-		log.Fatalf("Failed to subscribe to view submission channel: %v", err)
+		logger.Fatal("Failed to subscribe to view submission channel: %v", err)
 	}
-	log.Println("Successfully subscribed to view submission channel")
+	logger.Info("Successfully subscribed to view submission channel")
 
 	// Process messages from both channels
 	ch := pubsub.Channel()
@@ -180,53 +254,53 @@ func main() {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Shutting down...")
+			logger.Info("Shutting down...")
 			return
 		case msg := <-ch:
 			if msg == nil {
 				continue
 			}
-			handleMessage(ctx, slackClient, msg.Payload)
+			handleMessage(ctx, logger, slackClient, msg.Payload)
 		case msg := <-viewSubmissionCh:
 			if msg == nil {
 				continue
 			}
-			handleViewSubmission(ctx, redisClient, config, msg.Payload)
+			handleViewSubmission(ctx, logger, redisClient, config, msg.Payload)
 		}
 	}
 }
 
-func handleMessage(ctx context.Context, slackClient *slack.Client, payload string) {
-	log.Printf("Received message: %s", payload)
+func handleMessage(ctx context.Context, logger *Logger, slackClient *slack.Client, payload string) {
+	logger.Debug("Received message: %s", payload)
 
 	var cmd SlashCommandPayload
 	if err := json.Unmarshal([]byte(payload), &cmd); err != nil {
-		log.Printf("Failed to unmarshal payload: %v", err)
+		logger.Error("Failed to unmarshal payload: %v", err)
 		return
 	}
 
-	log.Printf("Processing command: %s from user: %s", cmd.Command, cmd.UserName)
+	logger.Info("Processing command: %s from user: %s", cmd.Command, cmd.UserName)
 
 	switch cmd.Command {
 	case "/new-repo":
-		handleNewRepoCommand(ctx, slackClient, &cmd)
+		handleNewRepoCommand(ctx, logger, slackClient, &cmd)
 	default:
-		log.Printf("Unknown command: %s", cmd.Command)
+		logger.Warn("Unknown command: %s", cmd.Command)
 	}
 }
 
-func handleNewRepoCommand(ctx context.Context, slackClient *slack.Client, cmd *SlashCommandPayload) {
-	log.Printf("Handling /new-repo command with trigger_id: %s", cmd.TriggerID)
+func handleNewRepoCommand(ctx context.Context, logger *Logger, slackClient *slack.Client, cmd *SlashCommandPayload) {
+	logger.Debug("Handling /new-repo command with trigger_id: %s", cmd.TriggerID)
 
 	modalView := createNewRepoModal(cmd.Text)
 
 	_, err := slackClient.OpenViewContext(ctx, cmd.TriggerID, modalView)
 	if err != nil {
-		log.Printf("Failed to open modal: %v", err)
+		logger.Error("Failed to open modal: %v", err)
 		return
 	}
 
-	log.Println("Successfully opened new-repo modal")
+	logger.Info("Successfully opened new-repo modal for user: %s", cmd.UserName)
 }
 
 func createNewRepoModal(repoName string) slack.ModalViewRequest {
@@ -304,35 +378,35 @@ func createNewRepoModal(repoName string) slack.ModalViewRequest {
 }
 
 // handleViewSubmission processes view submission payloads from Redis
-func handleViewSubmission(ctx context.Context, redisClient *redis.Client, config *Config, payload string) {
-	log.Printf("Received view submission: %s", payload)
+func handleViewSubmission(ctx context.Context, logger *Logger, redisClient *redis.Client, config *Config, payload string) {
+	logger.Debug("Received view submission: %s", payload)
 
 	var submission ViewSubmissionPayload
 	if err := json.Unmarshal([]byte(payload), &submission); err != nil {
-		log.Printf("Failed to unmarshal view submission payload: %v", err)
+		logger.Error("Failed to unmarshal view submission payload: %v", err)
 		return
 	}
 
 	// Only handle our specific callback_id
 	if submission.View.CallbackID != NewRepoModalCallbackID {
-		log.Printf("Ignoring view submission with callback_id: %s", submission.View.CallbackID)
+		logger.Debug("Ignoring view submission with callback_id: %s", submission.View.CallbackID)
 		return
 	}
 
 	// Extract values from the view state
 	values := extractViewValues(submission)
-	log.Printf("Extracted values: %+v", values)
+	logger.Debug("Extracted values: %+v", values)
 
 	// Get repository name and description
 	repoName, ok := values["repo-name"]
 	if !ok || repoName == "" {
-		log.Printf("Missing repository name in view submission")
+		logger.Error("Missing repository name in view submission")
 		return
 	}
 
 	// Validate repository name (GitHub allows alphanumeric, hyphens, underscores, dots)
 	if !isValidRepoName(repoName) {
-		log.Printf("Invalid repository name: %s", repoName)
+		logger.Error("Invalid repository name: %s", repoName)
 		return
 	}
 
@@ -369,24 +443,25 @@ func handleViewSubmission(ctx context.Context, redisClient *redis.Client, config
 	// Push to Poppit list
 	poppitPayload, err := json.Marshal(poppitCmd)
 	if err != nil {
-		log.Printf("Failed to marshal Poppit command: %v", err)
+		logger.Error("Failed to marshal Poppit command: %v", err)
 		return
 	}
 
 	err = redisClient.RPush(ctx, config.RedisPoppitList, string(poppitPayload)).Err()
 	if err != nil {
-		log.Printf("Failed to push to Poppit list: %v", err)
+		logger.Error("Failed to push to Poppit list: %v", err)
 		return
 	}
 
-	log.Printf("Successfully pushed Poppit command to list %s: %s", config.RedisPoppitList, string(poppitPayload))
+	logger.Info("Successfully pushed Poppit command for repo: %s", repoFullName)
+	logger.Debug("Poppit command payload: %s", string(poppitPayload))
 
 	// Send confirmation message to SlackLiner
-	sendNewRepoConfirmation(ctx, redisClient, config, repoFullName, repoDesc)
+	sendNewRepoConfirmation(ctx, logger, redisClient, config, repoFullName, repoDesc)
 }
 
 // sendNewRepoConfirmation sends a confirmation message to SlackLiner
-func sendNewRepoConfirmation(ctx context.Context, redisClient *redis.Client, config *Config, repoFullName, repoDesc string) {
+func sendNewRepoConfirmation(ctx context.Context, logger *Logger, redisClient *redis.Client, config *Config, repoFullName, repoDesc string) {
 	// Build the GitHub repository URL
 	repoURL := fmt.Sprintf("https://github.com/%s", repoFullName)
 
@@ -406,18 +481,18 @@ func sendNewRepoConfirmation(ctx context.Context, redisClient *redis.Client, con
 	// Marshal to JSON
 	messagePayload, err := json.Marshal(slackMessage)
 	if err != nil {
-		log.Printf("Failed to marshal SlackLiner message: %v", err)
+		logger.Error("Failed to marshal SlackLiner message: %v", err)
 		return
 	}
 
 	// Push to SlackLiner Redis list
 	err = redisClient.RPush(ctx, config.RedisSlackLinerList, string(messagePayload)).Err()
 	if err != nil {
-		log.Printf("Failed to push to SlackLiner list: %v", err)
+		logger.Error("Failed to push to SlackLiner list: %v", err)
 		return
 	}
 
-	log.Printf("Successfully sent confirmation message to SlackLiner for repo: %s", repoFullName)
+	logger.Info("Successfully sent confirmation message to SlackLiner for repo: %s", repoFullName)
 }
 
 // extractViewValues extracts values from the view submission state
