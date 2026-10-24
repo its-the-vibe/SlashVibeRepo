@@ -18,6 +18,10 @@ type Logger struct {
 	level Level
 }
 
+func (l *Logger) Level() Level {
+	return l.level
+}
+
 func New(levelName string) *Logger {
 	var level Level
 	switch strings.ToLower(levelName) {
