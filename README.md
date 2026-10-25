@@ -12,6 +12,13 @@ A simple Go service that subscribes to Slack slash commands and view submissions
 - Configurable via environment variables
 - Docker and Docker Compose support with scratch runtime for minimal image size
 
+## Code organization
+
+- The root `main.go` handles service startup; configuration loading is in `internal/config`.
+- `internal/models` contains shared payload and configuration types.
+- `internal/handlers` processes slash commands and view submissions.
+- `pkg/slack`, `pkg/github`, `pkg/redis`, and `pkg/logger` provide focused Slack modal, GitHub command, Redis client/subscription, and logging functionality.
+
 ## Prerequisites
 
 - Go 1.24 or later
@@ -308,4 +315,3 @@ redis-cli PUBLISH slack-commands '{"token":"test","team_id":"T123","team_domain"
 ## License
 
 MIT
-
