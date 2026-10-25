@@ -59,54 +59,20 @@ func main() {
 		cancel()
 	}()
 
-	// Subscribe to Redis channels
-	logger.Info("Subscribing to Redis channel: %s", config.RedisChannel)
-	pubsub := redisClient.Subscribe(ctx, config.RedisChannel)
-	defer func() {
-		if err := pubsub.Close(); err != nil {
-			logger.Error("Failed to close Redis channel subscription: %v", err)
-		}
-	}()
-
-	logger.Info("Subscribing to Redis view submission channel: %s", config.RedisViewSubmissionChannel)
-	viewSubmissionPubsub := redisClient.Subscribe(ctx, config.RedisViewSubmissionChannel)
-	defer func() {
-		if err := viewSubmissionPubsub.Close(); err != nil {
-			logger.Error("Failed to close Redis view submission subscription: %v", err)
-		}
-	}()
-
-	// Wait for subscription confirmation
-	_, err = pubsub.Receive(ctx)
+	err = redispkg.Listen(
+		ctx,
+		redisClient,
+		config.RedisChannel,
+		config.RedisViewSubmissionChannel,
+		logger,
+		func(payload string) {
+			handlers.HandleMessage(ctx, logger, slackClient, config, payload)
+		},
+		func(payload string) {
+			handlers.HandleViewSubmission(ctx, logger, redisClient, config, payload)
+		},
+	)
 	if err != nil {
-		logger.Fatal("Failed to subscribe to Redis channel: %v", err)
-	}
-	logger.Info("Successfully subscribed to Redis channel")
-
-	_, err = viewSubmissionPubsub.Receive(ctx)
-	if err != nil {
-		logger.Fatal("Failed to subscribe to view submission channel: %v", err)
-	}
-	logger.Info("Successfully subscribed to view submission channel")
-
-	// Process messages from both channels
-	ch := pubsub.Channel()
-	viewSubmissionCh := viewSubmissionPubsub.Channel()
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Info("Shutting down...")
-			return
-		case msg := <-ch:
-			if msg == nil {
-				continue
-			}
-			handlers.HandleMessage(ctx, logger, slackClient, config, msg.Payload)
-		case msg := <-viewSubmissionCh:
-			if msg == nil {
-				continue
-			}
-			handlers.HandleViewSubmission(ctx, logger, redisClient, config, msg.Payload)
-		}
+		logger.Fatal("%v", err)
 	}
 }
