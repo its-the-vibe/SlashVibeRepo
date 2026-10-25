@@ -61,7 +61,7 @@ func TestInitialIssueCommands(t *testing.T) {
 }
 
 func TestProjectConfigurationCommands(t *testing.T) {
-	vibeOps := NewVibeOpsCommand("example-org/example", "example", "/vibeops")
+	vibeOps := NewVibeOpsConfigCommand("example-org/example", "example", "/vibeops")
 	if vibeOps.Repo != "example-org/example" ||
 		vibeOps.Branch != "refs/heads/new-project/bootstrap-example" ||
 		vibeOps.Type != "slash-vibe-vibeops-config" ||

@@ -38,7 +38,22 @@ func InitialIssueCommands(repoFullName, prompt, workingDir string, delay int) []
 	}
 }
 
-func NewVibeOpsCommand(repoFullName, repoName, workingDir string) models.PoppitCommand {
+func NewVibeOpsNewProjectCommand(repoFullName, repoName, workingDir string) models.PoppitCommand {
+	return models.PoppitCommand{
+		Repo:   repoFullName,
+		Branch: "refs/heads/main",
+		Type:   "vibeops-new-project",
+		Dir:    workingDir,
+		Commands: []string{
+			"git checkout main",
+			"git pull",
+			"make build",
+			fmt.Sprintf("./vibeops new-project %s --no-env", repoName),
+		},
+	}
+}
+
+func NewVibeOpsConfigCommand(repoFullName, repoName, workingDir string) models.PoppitCommand {
 	branchName := fmt.Sprintf("%s/bootstrap-%s", models.NewProjectBranchPrefix, repoName)
 	prTitle := fmt.Sprintf("Add initial VibeOps configuration for %s", repoName)
 	return models.PoppitCommand{

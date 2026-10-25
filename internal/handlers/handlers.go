@@ -120,6 +120,8 @@ func handleViewSubmission(ctx context.Context, logger Logger, redisClient *redis
 	logger.Info("Successfully pushed Poppit command for repo: %s", repoFullName)
 	logger.Debug("Poppit command payload: %s", string(poppitPayload))
 
+	createNewProject(ctx, logger, redisClient, config, repoFullName, repoName)
+
 	// Check if VibeOps configuration should be created
 	createVibeOpsConfig := values["vibeops-config"] == "true"
 	if createVibeOpsConfig && config.VibeOpsWorkingDir != "" {
@@ -129,8 +131,35 @@ func handleViewSubmission(ctx context.Context, logger Logger, redisClient *redis
 		logger.Warn("VibeOps configuration requested but VIBEOPS_WORKING_DIR is not set")
 	}
 
+	// If GithubPrivateWorkingDir is configured, create a PR for projects.json in .github-private
+	if config.GithubPrivateWorkingDir != "" {
+		createGithubPrivatePR(ctx, logger, redisClient, config, repoFullName, repoName)
+	} else {
+		logger.Debug("GITHUB_PRIVATE_WORKING_DIR not set, skipping .github-private PR creation")
+	}
+
 	// Send confirmation message to SlackLiner
 	sendNewRepoConfirmation(ctx, logger, redisClient, config, repoFullName, repoDesc)
+}
+
+func createNewProject(ctx context.Context, logger Logger, redisClient *redisclient.Client, config *models.Config, repoFullName, repoName string) {
+	vibeOpsPoppitCmd := githubcmd.NewVibeOpsNewProjectCommand(repoFullName, repoName, config.VibeOpsWorkingDir)
+
+	// Push to Poppit list
+	vibeOpsPayload, err := json.Marshal(vibeOpsPoppitCmd)
+	if err != nil {
+		logger.Error("Failed to marshal VibeOps Poppit command: %v", err)
+		return
+	}
+
+	err = redisClient.RPush(ctx, config.RedisPoppitList, string(vibeOpsPayload)).Err()
+	if err != nil {
+		logger.Error("Failed to push VibeOps command to Poppit list: %v", err)
+		return
+	}
+
+	logger.Info("Successfully pushed VibeOps new project command for repo: %s", repoFullName)
+	logger.Debug("VibeOps Poppit command payload: %s", string(vibeOpsPayload))
 }
 
 // createVibeOpsConfiguration creates VibeOps configuration files and a draft PR
@@ -138,7 +167,7 @@ func handleViewSubmission(ctx context.Context, logger Logger, redisClient *redis
 // The commands are run sequentially in the VibeOps working directory.
 
 func createVibeOpsConfiguration(ctx context.Context, logger Logger, redisClient *redisclient.Client, config *models.Config, repoFullName, repoName string) {
-	vibeOpsPoppitCmd := githubcmd.NewVibeOpsCommand(repoFullName, repoName, config.VibeOpsWorkingDir)
+	vibeOpsPoppitCmd := githubcmd.NewVibeOpsConfigCommand(repoFullName, repoName, config.VibeOpsWorkingDir)
 
 	// Push to Poppit list
 	vibeOpsPayload, err := json.Marshal(vibeOpsPoppitCmd)
@@ -155,13 +184,6 @@ func createVibeOpsConfiguration(ctx context.Context, logger Logger, redisClient 
 
 	logger.Info("Successfully pushed VibeOps configuration command for repo: %s", repoFullName)
 	logger.Debug("VibeOps Poppit command payload: %s", string(vibeOpsPayload))
-
-	// If GithubPrivateWorkingDir is configured, create a PR for projects.json in .github-private
-	if config.GithubPrivateWorkingDir != "" {
-		createGithubPrivatePR(ctx, logger, redisClient, config, repoFullName, repoName)
-	} else {
-		logger.Debug("GITHUB_PRIVATE_WORKING_DIR not set, skipping .github-private PR creation")
-	}
 }
 
 // createGithubPrivatePR creates a PR in .github-private repository for projects.json changes
