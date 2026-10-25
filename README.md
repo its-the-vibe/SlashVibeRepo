@@ -239,12 +239,13 @@ When the user submits the modal, the service will:
 5. If the "Create sample VibeOps configuration files" checkbox is selected and `VIBEOPS_WORKING_DIR` is set:
    - Push an additional Poppit command to create VibeOps configuration files
    - The VibeOps commands will run in the `VIBEOPS_WORKING_DIR` directory
+   - Run `vibeops new-project --no-env` to update projects.json file
    - Create a new branch `bootstrap-<repo-name>`
    - Run `vibeops new-project` to generate configuration files
    - Commit and push the changes
    - Create a draft PR with the configuration files
    - If `GITHUB_PRIVATE_WORKING_DIR` is also set:
-     - After running `vibeops new-project`, which updates the `projects.json` file (a symlink to `.github-private` repository)
+     - After running `vibeops new-project --no-env`, which updates the `projects.json` file (a symlink to `.github-private` repository)
      - Create a new branch in `.github-private` repository: `add-project-<repo-name>`
      - Add and commit the updated `projects.json`
      - Push the branch to `.github-private` repository

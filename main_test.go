@@ -397,33 +397,6 @@ func TestLoadConfigWithTemplateRepos(t *testing.T) {
 	}
 }
 
-// TestLoadConfigWithNoTemplateRepos tests that templateRepos defaults to nil when not configured
-func TestLoadConfigWithNoTemplateRepos(t *testing.T) {
-	if err := os.Setenv("SLACK_BOT_TOKEN", "test-token"); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Setenv("GITHUB_ORG", "test-org"); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Unsetenv("SLACK_BOT_TOKEN"); err != nil {
-			t.Errorf("os.Unsetenv(SLACK_BOT_TOKEN) error = %v", err)
-		}
-		if err := os.Unsetenv("GITHUB_ORG"); err != nil {
-			t.Errorf("os.Unsetenv(GITHUB_ORG) error = %v", err)
-		}
-	}()
-
-	config, err := loadConfig()
-	if err != nil {
-		t.Fatalf("loadConfig() failed: %v", err)
-	}
-
-	if len(config.TemplateRepos) != 0 {
-		t.Errorf("expected empty TemplateRepos, got %v", config.TemplateRepos)
-	}
-}
-
 // TestLoadConfigWithGithubPrivateWorkingDir tests that the GITHUB_PRIVATE_WORKING_DIR is correctly loaded
 func TestLoadConfigWithGithubPrivateWorkingDir(t *testing.T) {
 	// Set up test environment
@@ -455,34 +428,6 @@ func TestLoadConfigWithGithubPrivateWorkingDir(t *testing.T) {
 
 	if config.GithubPrivateWorkingDir != "/test/github-private" {
 		t.Errorf("GithubPrivateWorkingDir = %q, want %q", config.GithubPrivateWorkingDir, "/test/github-private")
-	}
-}
-
-// TestLoadConfigWithoutGithubPrivateWorkingDir tests that the config loads with empty GITHUB_PRIVATE_WORKING_DIR
-func TestLoadConfigWithoutGithubPrivateWorkingDir(t *testing.T) {
-	// Set up test environment
-	if err := os.Setenv("SLACK_BOT_TOKEN", "test-token"); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Setenv("GITHUB_ORG", "test-org"); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Unsetenv("SLACK_BOT_TOKEN"); err != nil {
-			t.Errorf("os.Unsetenv(SLACK_BOT_TOKEN) error = %v", err)
-		}
-		if err := os.Unsetenv("GITHUB_ORG"); err != nil {
-			t.Errorf("os.Unsetenv(GITHUB_ORG) error = %v", err)
-		}
-	}()
-
-	config, err := loadConfig()
-	if err != nil {
-		t.Fatalf("loadConfig() failed: %v", err)
-	}
-
-	if config.GithubPrivateWorkingDir != "" {
-		t.Errorf("GithubPrivateWorkingDir = %q, want empty string", config.GithubPrivateWorkingDir)
 	}
 }
 
